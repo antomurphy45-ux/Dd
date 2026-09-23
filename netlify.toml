@@ -4,8 +4,8 @@
   functions = "netlify/functions"
 
 [functions]
-  node_bundler = "zisi"
-  included_files = ["app.py", "netlify_seed.db", "static/**", "data/**", "netlify/lib/api-implementation.mjs"]
+  node_bundler = "esbuild"
+  included_files = ["app.py", "netlify_seed.db", "static/**", "data/**"]
 
 [[redirects]]
   from = "/api/*"
