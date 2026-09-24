@@ -5,7 +5,14 @@
 
 [functions]
   node_bundler = "esbuild"
-  included_files = ["app.py", "netlify_seed.db", "static/**", "data/**"]
+  external_node_modules = ["pyodide"]
+  included_files = [
+    "app.py",
+    "netlify_seed.db",
+    "netlify/lib/**",
+    "static/**",
+    "data/**"
+  ]
 
 [[redirects]]
   from = "/api/*"
@@ -15,7 +22,7 @@
 
 [[redirects]]
   from = "/healthz"
-  to = "/.netlify/functions/api/healthz"
+  to = "/.netlify/functions/healthz"
   status = 200
   force = true
 
@@ -26,5 +33,15 @@
 
 [[headers]]
   for = "/index.html"
+  [headers.values]
+    Cache-Control = "no-store, max-age=0"
+
+[[headers]]
+  for = "/app.js"
+  [headers.values]
+    Cache-Control = "no-store, max-age=0"
+
+[[headers]]
+  for = "/app.css"
   [headers.values]
     Cache-Control = "no-store, max-age=0"

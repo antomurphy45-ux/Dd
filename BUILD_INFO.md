@@ -61,3 +61,9 @@ Validation:
 - Python syntax PASS
 - Netlify configuration checks PASS
 - ZIP integrity PASS
+
+## Phase 32.38 — Netlify function discovery hardening
+- Added an independent dependency-free `healthz` function.
+- Restored a CommonJS `api.js` function entry exporting `exports.handler`.
+- Switched the functions bundler configuration to esbuild with Pyodide externalised.
+- Added explicit runtime included files and current deployment-readiness tests.
