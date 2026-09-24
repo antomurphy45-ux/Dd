@@ -1,5 +1,5 @@
 // Construction Control API entry point.
-// Phase 32.45: Pyodide Node loading fix.
+// Phase 32.46: Pyodide virtual filesystem directory fix.
 import { withLambda } from "@netlify/aws-lambda-compat";
 
 const lambdaHandler = async function handler(event, context) {
@@ -11,14 +11,14 @@ const lambdaHandler = async function handler(event, context) {
       headers: {
         "content-type": "application/json; charset=utf-8",
         "cache-control": "no-store",
-        "x-construction-control-function": "32.45"
+        "x-construction-control-function": "32.46"
       },
       body: JSON.stringify({
         status: "ok",
         platform: "netlify",
         function: "api",
         storage: "netlify-blobs",
-        phase: "32.45"
+        phase: "32.46"
       })
     };
   }
