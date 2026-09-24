@@ -1,16 +1,15 @@
 from pathlib import Path
 import json
-import subprocess
 
 ROOT = Path(__file__).resolve().parents[1]
 
 
-def test_netlify_function_directory_contains_real_entries():
+def test_netlify_function_directory_contains_modern_entries():
     functions = ROOT / "functions"
-    assert (functions / "api.js").exists()
-    assert (functions / "healthz.js").exists()
-    assert not (functions / "api.mjs").exists()
-    assert not (functions / "api.cjs").exists()
+    assert (functions / "api.mjs").exists()
+    assert (functions / "healthz.mjs").exists()
+    assert not (functions / "api.js").exists()
+    assert not (functions / "healthz.js").exists()
 
 
 def test_netlify_config_points_to_function_directory_and_routes():
@@ -26,41 +25,27 @@ def test_netlify_config_points_to_function_directory_and_routes():
 
 def test_dependencies_and_included_runtime_files_exist():
     pkg = json.loads((ROOT / "package.json").read_text())
+    assert pkg["dependencies"]["@netlify/aws-lambda-compat"] == "2.0.0"
     assert pkg["dependencies"]["@netlify/blobs"] == "11.1.0"
     assert pkg["dependencies"]["pyodide"] == "0.29.5"
     for rel in ["app.py", "netlify_seed.db", "lib/api-implementation.mjs"]:
         assert (ROOT / rel).exists(), rel
 
 
-def test_commonjs_function_exports_handler_and_health_probe_runs():
-    js = """
-const api = require('./functions/api.js');
-if (typeof api.handler !== 'function') process.exit(2);
-api.handler({path:'/healthz'}).then(r => {
-  if (r.statusCode !== 200) process.exit(3);
-  const d = JSON.parse(r.body);
-  if (d.status !== 'ok' || d.platform !== 'netlify') process.exit(4);
-  console.log('api-handler-healthz: PASS');
-});
-"""
-    r = subprocess.run(["node", "-e", js], cwd=ROOT, capture_output=True, text=True)
-    assert r.returncode == 0, r.stderr + r.stdout
-    assert "api-handler-healthz: PASS" in r.stdout
+def test_modern_api_function_uses_lambda_compat_and_health_probe():
+    text = (ROOT / "functions/api.mjs").read_text()
+    assert 'from "@netlify/aws-lambda-compat"' in text
+    assert "export default withLambda(lambdaHandler)" in text
+    assert 'import("../lib/api-implementation.mjs")' in text
+    assert 'path === "/healthz"' in text
+    assert "statusCode: 200" in text
 
 
-def test_independent_healthz_function_exports_handler():
-    js = """
-const f = require('./functions/healthz.js');
-if (typeof f.handler !== 'function') process.exit(2);
-f.handler({}).then(r => {
-  if (r.statusCode !== 200) process.exit(3);
-  const d = JSON.parse(r.body);
-  if (d.function !== 'healthz') process.exit(4);
-  console.log('healthz-function: PASS');
-});
-"""
-    r = subprocess.run(["node", "-e", js], cwd=ROOT, capture_output=True, text=True)
-    assert r.returncode == 0, r.stderr + r.stdout
+def test_independent_healthz_function_is_modern_netlify_function():
+    text = (ROOT / "functions/healthz.mjs").read_text()
+    assert "export default async function handler" in text
+    assert "new Response" in text
+    assert 'function: "healthz"' in text
 
 
 def test_frontend_root_static_public_are_identical():

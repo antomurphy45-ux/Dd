@@ -1,9 +1,11 @@
 from pathlib import Path
-import re
-ROOT=Path(__file__).resolve().parents[1]
+ROOT = Path(__file__).resolve().parents[1]
 
-def test_commonjs_netlify_entry_exports_handler():
-    entry=ROOT/"functions/api.js"
-    text=entry.read_text()
-    assert "exports.handler" in text
+
+def test_modern_netlify_entry_preserves_lambda_handler_contract():
+    entry = ROOT / "functions/api.mjs"
+    text = entry.read_text()
+    assert 'from "@netlify/aws-lambda-compat"' in text
+    assert "withLambda(lambdaHandler)" in text
+    assert "event, context" in text
     assert "../lib/api-implementation.mjs" in text
