@@ -1,22 +1,21 @@
-# Phase 32.40 validation
+# Phase 32.41 validation
 
 Target: Netlify-only Construction Control deployment.
 
-Production error diagnosed from Netlify logs:
-- `fileURLToPath(import.meta.url)` was receiving an undefined URL after Netlify bundled the ESM API implementation into the CommonJS Lambda runtime.
-- This caused the API Function to return HTTP 502 before login processing.
-
-Fix:
-- API implementation root resolution now uses `LAMBDA_TASK_ROOT` when present, falling back to `process.cwd()` for local execution.
-- Removed the `import.meta.url` / `fileURLToPath` dependency from the Netlify runtime path.
+Change in this phase:
+- Migrated the Netlify Functions entry points to the modern Netlify Functions runtime.
+- Added `@netlify/aws-lambda-compat` 2.0.0 so the existing AWS Lambda-style handler contract can remain unchanged.
+- This is specifically to ensure Netlify platform primitives, including automatic Netlify Blobs context, are available to the API handler.
+- The application still initializes `getStore()` inside the request path.
 
 Validated locally:
-- JavaScript syntax checks passed.
+- JavaScript syntax checks passed for functions/api.mjs, functions/healthz.mjs, and lib/api-implementation.mjs.
 - Python compile check passed for app.py.
-- Netlify build command completed successfully.
+- Netlify frontend build preparation completed.
 - Root/static/public frontend assets are byte-identical.
-- Dependency-free API and healthz function probes return HTTP 200.
-- Deployment/application regression suite remains green for the same 27 targeted tests used as the Netlify deployment gate.
-- New regression checks confirm the bundled-runtime-safe root resolution contract.
+- Required deployment files are present.
+- No Render deployment files are required by the Netlify build configuration.
 
-Note: the repository contains historical phase tests with older fixture expectations; the complete historical suite is not used as the deployment gate.
+Note:
+- The full historical test suite is not the deployment gate because it contains older fixture expectations and long-running tests.
+- The environment-specific Netlify Blobs auto-injection cannot be fully reproduced without a live Netlify runtime in this local validation environment; production verification is therefore required after deployment.

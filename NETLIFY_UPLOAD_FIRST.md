@@ -1,4 +1,4 @@
-# Construction Control — Phase 32.40 Netlify upload
+# Construction Control — Phase 32.41 Netlify upload
 
 ## Why this version exists
 
@@ -48,5 +48,5 @@ Then open `/healthz` on the live site. Expected JSON contains:
 Only after that should `/api/login` be tested.
 
 
-## Phase 32.40 production fix
+## Phase 32.41 production fix
 The API 502 was traced to Netlify's bundled CommonJS runtime evaluating `import.meta.url` as undefined. The API implementation no longer uses `fileURLToPath(import.meta.url)`; it resolves the Lambda root from `LAMBDA_TASK_ROOT` and falls back to the local working directory.

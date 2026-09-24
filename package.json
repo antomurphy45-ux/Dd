@@ -7,7 +7,8 @@
   },
   "dependencies": {
     "@netlify/blobs": "11.1.0",
-    "pyodide": "0.29.5"
+    "pyodide": "0.29.5",
+    "@netlify/aws-lambda-compat": "2.0.0"
   },
   "scripts": {
     "build": "node netlify-build.mjs"
