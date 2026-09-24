@@ -21,9 +21,9 @@ else:
         except Exception: pass
     DB_PATH=DEFAULT_DB.resolve()
 DB_PATH.parent.mkdir(parents=True, exist_ok=True)
-# Netlify bootstrap: the packaged seed is copied into the function working DB only
-# when the persistent Netlify Blob store has not supplied a database yet.
-BUNDLED_DB=BASE/"netlify_seed.db"
+# No-disk Render bootstrap: if the configured runtime DB is absent, seed it
+# from the packaged 565 KB baseline database. Never overwrite an existing DB.
+BUNDLED_DB=BASE/"render_seed.db"
 if _env_db and DB_PATH != BUNDLED_DB and not DB_PATH.exists() and BUNDLED_DB.exists():
     try: shutil.copy2(BUNDLED_DB, DB_PATH)
     except Exception: pass
@@ -216,14 +216,6 @@ TIERS={
  "enterprise":{"users":10000,"projects":10000,"storage_gb":5000,"features":["core","commercial","compliance","handover","management","api","sso"]}
 }
 def storage_status():
-    if os.getenv("CONSTRUCTION_CONTROL_NETLIFY") == "1":
-        return {
-            "provider": "netlify-blobs",
-            "db_path": str(DB_PATH),
-            "db_exists": DB_PATH.exists(),
-            "db_size_bytes": DB_PATH.stat().st_size if DB_PATH.exists() else 0,
-            "persistent_required": True,
-        }
     parent=DB_PATH.parent
     try:
         root_dev=os.stat("/").st_dev
@@ -434,7 +426,7 @@ def seed_dub84_from_source(c):
         c.execute("INSERT INTO projects(id,company_id,name,level_id,manloader,start_date,finish_date,client_name,site_address,scope_ref) VALUES(?,?,?,?,?,?,?,?,?,?)",
                   (code,company_id,project.get("name") or code,level_id,float(project.get("manloader_peak") or 0),project.get("start_date"),project.get("finish_date"),project.get("client_name") or "",project.get("site_address") or code,project.get("scope_ref") or source.name))
     # Make the imported demo project visible to every active user in the same company.
-    # This also repairs access on an existing persisted database after redeploy.
+    # This also repairs access on an existing persistent Render database after redeploy.
     c.execute("INSERT OR IGNORE INTO project_access(user_id,project_id) SELECT id, ? FROM users WHERE company_id=? AND active=1",(code,company_id))
     plan_id="PLAN-"+code
     c.execute("INSERT OR IGNORE INTO plans(id,company_id,project_id,name,status,baseline,created_by) VALUES(?,?,?,?,?,?,?)",
@@ -1147,7 +1139,7 @@ class Handler(BaseHTTPRequestHandler):
         self.send_header("Referrer-Policy", "strict-origin-when-cross-origin")
         self.send_header("Permissions-Policy", "camera=(), microphone=(), geolocation=()")
         # HSTS is only safe to emit when the request is actually HTTPS (including a TLS
-        # reverse proxy. Local HTTP development therefore remains usable.
+        # reverse proxy such as Render). Local HTTP development therefore remains usable.
         # parse_request() can fail before BaseHTTPRequestHandler creates `headers`
         # (for example when an HTTPS/TLS client accidentally connects to this plain
         # HTTP development port). Never let the security-header hook mask the real
@@ -1415,17 +1407,13 @@ class Handler(BaseHTTPRequestHandler):
             if posixpath.normpath(path) != path:
                 self.j(400,{"error":"Invalid API path"}); return
         if self.command=="GET" and path=="/healthz":
+            # Phase 32.18 no-disk mode: the app may run on Render's ephemeral
+            # filesystem. Keep the database usable, but expose the storage
+            # warning so operators know backups are required.
             st=storage_status()
-            if os.getenv("CONSTRUCTION_CONTROL_NETLIFY") == "1":
-                self.j(200,{"status":"ok","storage":st,"warning":"Persistent storage is provided by Netlify Blobs."})
-                return
-            required=st["persistent_required"]
-            if required and not st.get("data_dir_mount"):
-                self.j(503,{"status":"degraded","storage":st,"error":"Persistent storage is required but the configured data directory is not mounted."})
-                return
             self.j(200,{"status":"ok","storage":st,
-                        "warning":("The local filesystem is ephemeral; use Full Backup before redeploying or restarting."
-                                   if not st.get("data_dir_mount") else "Persistent storage is mounted.")})
+                        "warning":("Render storage is ephemeral. Download a Full Backup before redeploying or restarting the service."
+                                   if not st["data_dir_mount"] else "Persistent storage is mounted.")})
             return
         c=db()
         try:
@@ -1902,7 +1890,7 @@ class Handler(BaseHTTPRequestHandler):
                         if len(filename)>180 or "/" in filename or "\\" in filename or "\x00" in filename: self.j(400,{"error":"Invalid filename"}); return
                         try: data=base64.b64decode(raw,validate=True)
                         except Exception: self.j(400,{"error":"Invalid base64 content"}); return
-                        if len(data)>4*1024*1024: self.j(413,{"error":"Document is larger than 4 MB"}); return
+                        if len(data)>10*1024*1024: self.j(413,{"error":"Document is larger than 10 MB"}); return
                         did=secrets.token_hex(8); stored=did+".bin"
                         UPLOADS.mkdir(parents=True,exist_ok=True); (UPLOADS/stored).write_bytes(data)
                         c.execute("INSERT INTO staff_training_documents(id,company_id,staff_id,training_id,filename,stored_name,mime_type,size_bytes,uploaded_by) VALUES(?,?,?,?,?,?,?,?,?)",(did,u["company_id"],sid,tid,filename,stored,mime,len(data),u["id"]))
@@ -2809,7 +2797,7 @@ class Handler(BaseHTTPRequestHandler):
                     if not valid_record: self.j(400,{"error":"Invalid record for project"}); return
                 try: data=base64.b64decode(raw,validate=True)
                 except Exception: self.j(400,{"error":"Invalid base64 content"}); return
-                if len(data)>4*1024*1024: self.j(413,{"error":"Development upload limit is 4 MB"}); return
+                if len(data)>10*1024*1024: self.j(413,{"error":"Development upload limit is 10 MB"}); return
                 aid=secrets.token_hex(8); stored=aid+".bin"
                 (UPLOADS/stored).write_bytes(data)
                 c.execute("INSERT INTO attachments(id,company_id,project_id,record_id,filename,stored_name,mime_type,size_bytes,uploaded_by) VALUES(?,?,?,?,?,?,?,?,?)",(aid,u["company_id"],project_id,record_id,filename,stored,mime,len(data),u["id"]))
@@ -2871,30 +2859,3 @@ class Handler(BaseHTTPRequestHandler):
 if __name__=="__main__":
     init_db(); print(f"Construction Control: listening on port {PORT}")
     ThreadingHTTPServer(("0.0.0.0",PORT),Handler).serve_forever()
-
-
-# Netlify adapter: lets the existing HTTP handler run inside a serverless request.
-# The actual Netlify Function supplies the in-memory request/response objects.
-def netlify_handle(method, path, headers=None, body=b""):
-    import io
-    class _Response:
-        def __init__(self):
-            self.status=200; self.headers={}; self.body=io.BytesIO()
-        def send_response(self, status, message=None): self.status=status
-        def send_header(self, key, value): self.headers[str(key)]=str(value)
-        def end_headers(self): pass
-        def send_error(self, status, message=None):
-            self.status=status
-            self.headers["Content-Type"]="text/plain"
-            self.body.write((message or "Error").encode())
-    r=_Response()
-    h={str(k):str(v) for k,v in (headers or {}).items()}
-    h.setdefault("Content-Length", str(len(body)))
-    obj=object.__new__(Handler)
-    obj.command=method.upper(); obj.path=path; obj.headers=h
-    obj.rfile=io.BytesIO(body); obj.wfile=r.body
-    obj.request_version="HTTP/1.1"; obj.server_version="Construction-Control-Netlify"
-    obj.send_response=r.send_response; obj.send_header=r.send_header; obj.end_headers=r.end_headers; obj.send_error=r.send_error
-    obj.close_connection=True
-    obj.do()
-    return r.status, r.headers, r.body.getvalue()
