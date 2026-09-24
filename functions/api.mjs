@@ -14,13 +14,14 @@ const lambdaHandler = async function handler(event, context) {
       headers: {
         "content-type": "application/json; charset=utf-8",
         "cache-control": "no-store",
-        "x-construction-control-function": "32.42"
+        "x-construction-control-function": "32.43"
       },
       body: JSON.stringify({
         status: "ok",
         platform: "netlify",
         function: "api",
-        storage: "netlify-blobs"
+        storage: "netlify-blobs",
+        phase: "32.43"
       })
     };
   }
