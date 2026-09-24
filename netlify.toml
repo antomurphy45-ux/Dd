@@ -11,7 +11,8 @@
     "netlify_seed.db",
     "lib/**",
     "static/**",
-    "data/**"
+    "data/**",
+    "node_modules/pyodide/**"
   ]
 
 [[redirects]]
