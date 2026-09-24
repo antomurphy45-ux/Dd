@@ -6,12 +6,40 @@ let state={me:null,company:null,projects:[],users:[],roles:[],levels:[],audit:[]
 const ROLE_VALUES=['Construction Manager','Foreman','Charge Hand','Electrician','4th Year','3rd Year','2nd Year','1st Year','GO'];
 const STAFF_LEVELS=['Site Management','Charge Hand','Engineers','Electrician','4th Year','3rd Year','2nd Year','1st Year','General Operative','Subcontractor','Unspecified'];
 const STAFF_LEVEL_COLORS={'Site Management':'#ffbd0a','Charge Hand':'#5b8f3b','Engineers':'#f6d1ab','Electrician':'#ff0000','4th Year':'#ff00d8','3rd Year':'#ffff00','2nd Year':'#00ff00','1st Year':'#10a7df','General Operative':'#c0c0c0','Subcontractor':'#9b00ff','Unspecified':'#ffffff'};
-async function api(p,o={}){let r=await fetch(p,{headers:{'Content-Type':'application/json',...(o.headers||{})},...o}),d=await r.json().catch(()=>({error:'Invalid server response'}));if(!r.ok)throw Error(d.error||'Request failed');return d}
+async function api(p,o={}){let r=await fetch(p,{headers:{'Content-Type':'application/json',...(o.headers||{})},credentials:'same-origin',...o}),raw=await r.text(),d=null;try{d=raw?JSON.parse(raw):null}catch(_){d=null}if(!d){const snippet=raw.replace(/\s+/g,' ').slice(0,180);throw Error(`Invalid server response (HTTP ${r.status})${snippet?`: ${snippet}`:''}`)}if(!r.ok)throw Error(d.error||`Request failed (HTTP ${r.status})`);return d}
 const esc=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 function login(msg=''){app.innerHTML=`<div class="shell login"><div class="card"><h1>Construction Control</h1><p class="muted">Project Management & Control</p><label>Email</label><input id="email" value="owner@demo.local" autocomplete="username"><label>Password</label><input id="password" type="password" value="DemoPass!123" autocomplete="current-password"><button onclick="go()">Sign in</button><p class="error">${esc(msg)}</p><small>Demo: owner@demo.local / DemoPass!123</small></div></div>`}
 async function go(){try{await api('/api/login',{method:'POST',body:JSON.stringify({email:email.value,password:password.value})});await load();render()}catch(e){login(e.message)}}
 async function load(){let m=await api('/api/me');let [p,e]=await Promise.all([api('/api/projects'),api('/api/entitlements')]);state={...state,me:m.user,company:m.company,projects:p.projects,ent:e}; let n=await api('/api/notifications'); state.notifications=n.notifications;const accessAdmin=['Company Administrator','Company Director','Business Unit Lead','Construction Manager'].includes(state.me.role); if(accessAdmin){let [u,r]=await Promise.all([api('/api/users'),api('/api/roles')]);state={...state,users:u.users,roles:r.roles,ladder:r.ladder||[]}; if(state.me.role==='Company Administrator'){let [l,a,s]=await Promise.all([api('/api/org'),api('/api/audit'),api('/api/settings')]);state={...state,levels:l.levels,audit:a.audit,settings:s.settings};applySettings()}}else{state={...state,users:[],roles:[],levels:[],audit:[]}}}
 function nav(active){const logo=state.company&&state.company.logo_url?`<img class="brand-logo-img" src="${esc(state.company.logo_url)}" alt="Company logo">`:`<div class="brand-logo-placeholder">LOGO</div>`;return `<aside><div class="brand-block">${logo}<div class="brand-name">${esc(state.company?.name||'Construction Control')}</div><div class="brand-product">Construction Control</div></div><button class="nav ${active==='home'?'on':''}" onclick="page('home')">Dashboard</button><button class="nav ${active==='control'?'on':''}" onclick="page('control')">Project Control</button><button class="nav ${active==='management'?'on':''}" onclick="page('management')">Management Centre</button><button class="nav ${active==='planning'?'on':''}" onclick="page('planning')">Programme</button><button class="nav ${active==='daily'?'on':''}" onclick="page('daily')">Morning Brief</button><button class="nav ${active==='closeout'?'on':''}" onclick="page('closeout')">Close Out</button><button class="nav ${active==='staff'?'on':''}" onclick="page('staff')">Staff & Assignments</button><button class="nav" onclick="page('projects')">Projects</button>${['Company Administrator','Company Director','Business Unit Lead','Construction Manager'].includes(state.me.role)?`<button class="nav" onclick="page('users')">Users</button>`:''}${state.me.role==='Company Administrator'?`<button class="nav ${active==='org'?'on':''}" onclick="page('org')">Organisation</button><button class="nav ${active==='roles'?'on':''}" onclick="page('roles')">Access Ladder</button><button class="nav" onclick="page('audit')">Audit trail</button><button class="nav ${active==='settings'?'on':''}" onclick="page('settings')">Settings</button>`:''}<button class="nav nav-logout" onclick="out()">Log out</button></aside>`}
+
+function layout(title,body,active='home'){
+ app.innerHTML=`<div class="layout">${nav(active)}<section class="content"><header><div><div class="eyebrow">PROJECT MANAGEMENT & CONTROL</div><h1>${title}</h1><p class="muted">${esc(state.me?.name||'')} • ${esc(state.me?.role||'')}</p></div><div class="header-badges"><span class="pill">${esc(state.ent?.tier||'')}</span></div></header>${body}</section></div>`;
+}
+function page(p){({home,control,project:projectOverview,projects,planning,daily:dailySiteControl,closeout:closeOut,staff:staffPage,org,users,roles,audit,notifications,management,settings}[p]||home)()}
+function dashValue(p,key){
+ const k=(p&&p.kpis)||{};
+ const value=k[key] ?? (p&&p[key]) ?? 0;
+ const n=Number(value);
+ return Number.isFinite(n)?n:0;
+}
+function dashboardProjectCards(projects){
+ return projects.map(p=>{
+   const a=p.active_plan;
+   return `<div class="project-card">
+     <div class="project-card-head"><div><span class="eyebrow">PROJECT</span><h3>${esc(p.project_name)}</h3></div><button class="pill rag-button ${esc(p.health||'green')}" title="Show why this project has this status" onclick="showProjectHealth('${esc(p.project_id)}')">${esc((p.health||'green').toUpperCase())}</button><button class="linkbtn" onclick="quickOpenProject('${esc(p.project_id)}')">Open project →</button></div>
+     <div class="project-meta">${p.records} records ${a?`• Programme ${esc(a.name)} • ${a.progress}% • finish ${esc(a.finish||'—')}`:'• No programme'}</div>
+     <div class="project-kpis">
+       <button class="kpi-chip blue" onclick="openDashboardModule('RFIs','${esc(p.project_id)}')"><b>${dashValue(p,'rfis')}</b><span>RFIs</span></button>
+       <button class="kpi-chip red" onclick="openDashboardModule('Risks','${esc(p.project_id)}')"><b>${dashValue(p,'risks')}</b><span>Risks</span></button>
+       <button class="kpi-chip amber" onclick="openDashboardModule('Actions','${esc(p.project_id)}')"><b>${dashValue(p,'actions')}</b><span>Actions</span></button>
+       <button class="kpi-chip purple" onclick="openDashboardModule('Snags','${esc(p.project_id)}')"><b>${dashValue(p,'snags')}</b><span>Snags</span></button>
+       <button class="kpi-chip teal" onclick="openDashboardModule('Approvals','${esc(p.project_id)}')"><b>${dashValue(p,'pending_approvals')}</b><span>Approvals</span></button>
+     </div>
+     <div class="project-footer"><span>Manpower <b>${Number(p.today?.actual_men||0).toFixed(1)}</b> actual / ${Number(p.today?.planned_men||0).toFixed(1)} planned</span><span>Held up <b>${p.programme?.held_up||0}</b> • Overdue <b>${p.programme?.overdue||0}</b></span></div>
+   </div>`;
+ }).join('')||'<div class="empty-state">No accessible projects.</div>';
+}
 function showProjectHealth(projectId){
  const p=(dashboardData?.project_summary||[]).find(x=>x.project_id===projectId); if(!p)return;
  const colour=p.health==='red'?'red':p.health==='amber'?'amber':'green';

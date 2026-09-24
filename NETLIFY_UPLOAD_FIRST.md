@@ -1,40 +1,52 @@
-# Upload this repository as one complete replacement
+# Construction Control — Phase 32.40 Netlify upload
 
-This ZIP is a complete repository snapshot for Construction Control Phase 32.38.
+## Why this version exists
 
-## GitHub
-Replace the repository contents with the contents of this ZIP and commit them to `main`.
-Do not put the repository inside an extra folder.
+The live Netlify project was reporting **0 functions in production**. The linked GitHub `main` branch had `netlify.toml`, but the function files were not present in the repository. This build removes the extra `netlify/` directory level for Functions and uses a simple root `functions/` directory.
 
-The following paths must exist at the repository root after upload:
+## Required repository root
+
+After extracting this package, the GitHub repository root must contain:
 
 - `netlify.toml`
 - `package.json`
 - `app.py`
-- `netlify/functions/api.js`
-- `netlify/functions/healthz.js`
-- `netlify/lib/api-implementation.mjs`
+- `functions/api.js`
+- `functions/healthz.js`
+- `lib/api-implementation.mjs`
 - `public/index.html`
 - `public/app.js`
 - `public/app.css`
 
-## Netlify
-Netlify must use:
+Do not upload the ZIP itself as the application source. Extract it first.
+
+## Netlify settings
+
+The repository `netlify.toml` is authoritative:
+
 - Build command: `npm run build`
 - Publish directory: `public`
-- Functions directory: `netlify/functions`
+- Functions directory: `functions`
 
-Do not add a Render service or Docker build.
+Do not manually change the Functions directory to `netlify/functions`.
 
 ## First production test
-After the deploy finishes, open:
 
-`/healthz`
+Before testing login, check Netlify > Functions. It should show:
 
-Expected response is JSON, not a Netlify Page Not Found HTML page.
-
-Then open Netlify → Functions. Production should list:
 - `api`
 - `healthz`
 
-If Functions still shows zero, stop there: the repository has not been deployed from the expected root/function directory and login testing is premature.
+Then open `/healthz` on the live site. Expected JSON contains:
+
+`"status":"ok"`
+
+`"platform":"netlify"`
+
+`"function":"healthz"`
+
+Only after that should `/api/login` be tested.
+
+
+## Phase 32.40 production fix
+The API 502 was traced to Netlify's bundled CommonJS runtime evaluating `import.meta.url` as undefined. The API implementation no longer uses `fileURLToPath(import.meta.url)`; it resolves the Lambda root from `LAMBDA_TASK_ROOT` and falls back to the local working directory.
