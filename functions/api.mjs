@@ -1,30 +1,34 @@
 // Construction Control API entry point.
-// Phase 32.47: load the Pyodide sqlite3 package before importing app.py.
-import { withLambda } from "@netlify/aws-lambda-compat";
+// Phase 32.53: bypass Lambda compatibility so native Response headers,
+// especially Set-Cookie, are passed directly through Netlify Functions.
+const implementation = await import("../lib/api-implementation.mjs");
 
-const lambdaHandler = async function handler(event, context) {
-  const path = event?.path || event?.rawPath || "/";
+export default async function handler(req, context) {
+  const headers = new Headers(req.headers);
+  const rawUrl = req.url || `https://${headers.get("host") || "localhost"}/`;
+  const bytes = new Uint8Array(await req.arrayBuffer());
 
-  if (path === "/healthz" || path === "/.netlify/functions/api/healthz") {
-    return {
-      statusCode: 200,
-      headers: {
-        "content-type": "application/json; charset=utf-8",
-        "cache-control": "no-store",
-        "x-construction-control-function": "32.47"
-      },
-      body: JSON.stringify({
-        status: "ok",
-        platform: "netlify",
-        function: "api",
-        storage: "netlify-blobs",
-        phase: "32.47"
-      })
-    };
-  }
+  const event = {
+    path: new URL(rawUrl).pathname,
+    rawPath: new URL(rawUrl).pathname,
+    rawUrl,
+    httpMethod: req.method,
+    headers: Object.fromEntries(headers.entries()),
+    body: Buffer.from(bytes).toString("base64"),
+    isBase64Encoded: true
+  };
 
-  const implementation = await import("../lib/api-implementation.mjs");
-  return implementation.handler(event, context);
-};
+  const result = await implementation.handler(event, context);
 
-export default withLambda(lambdaHandler);
+  const responseHeaders = new Headers(result.headers || {});
+  responseHeaders.delete("content-length");
+
+  const body = result.isBase64Encoded
+    ? Buffer.from(result.body || "", "base64")
+    : result.body || "";
+
+  return new Response(body, {
+    status: Number(result.statusCode || 200),
+    headers: responseHeaders
+  });
+}
