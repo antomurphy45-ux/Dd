@@ -1,9 +1,7 @@
 from pathlib import Path
+ROOT=Path(__file__).resolve().parents[1]
 
-
-def test_api_exports_modern_and_lambda_handlers():
-    text = Path("netlify/functions/api.mjs").read_text()
-    assert "export default handleRequest;" in text
-    assert "export const handler = async (event) =>" in text
-    assert "isBase64Encoded: true" in text
-    assert "statusCode: response.status" in text
+def test_api_entry_is_commonjs_and_dynamic_imports_implementation():
+    text=(ROOT/'functions/api.js').read_text()
+    assert 'exports.handler' in text
+    assert 'import("../lib/api-implementation.mjs")' in text

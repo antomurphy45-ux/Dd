@@ -5,7 +5,7 @@ exports.handler = async function handler() {
     headers: {
       "content-type": "application/json; charset=utf-8",
       "cache-control": "no-store",
-      "x-construction-control-function": "32.38-healthz"
+      "x-construction-control-function": "32.40-healthz"
     },
     body: JSON.stringify({
       status: "ok",
