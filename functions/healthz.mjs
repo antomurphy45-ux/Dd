@@ -1,7 +1,5 @@
-// Construction Control — Phase 32.43 deployment diagnostic.
-// This endpoint is intentionally dependency-free so it can prove that the
-// current Netlify production function sees the expected runtime environment.
-// It reports presence/absence only; it never returns secret values.
+// Construction Control — Phase 32.44 deployment diagnostic.
+// Reports presence/absence only; it never returns secret values.
 
 function presence(name) {
   return Boolean(process.env[name]);
@@ -13,7 +11,7 @@ export default async function handler() {
     platform: "netlify",
     function: "healthz",
     storage: "netlify-blobs",
-    phase: "32.43",
+    phase: "32.44",
     blob_credentials: {
       site_id_present: Boolean(
         process.env.CONSTRUCTION_CONTROL_SITE_ID ||
@@ -34,7 +32,7 @@ export default async function handler() {
     headers: {
       "content-type": "application/json; charset=utf-8",
       "cache-control": "no-store",
-      "x-construction-control-function": "32.43-healthz"
+      "x-construction-control-function": "32.44-healthz"
     }
   });
 }
