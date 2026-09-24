@@ -1,4 +1,4 @@
-# Phase 32.41 validation
+# Phase 32.42 validation
 
 Target: Netlify-only Construction Control deployment.
 
@@ -6,7 +6,7 @@ Change in this phase:
 - Migrated the Netlify Functions entry points to the modern Netlify Functions runtime.
 - Added `@netlify/aws-lambda-compat` 2.0.0 so the existing AWS Lambda-style handler contract can remain unchanged.
 - This is specifically to ensure Netlify platform primitives, including automatic Netlify Blobs context, are available to the API handler.
-- The application still initializes `getStore()` inside the request path.
+- The application still initializes `getStore()` inside the request path. Phase 32.42 also passes explicit credentials from runtime environment variables so production does not depend on automatic Blobs credential injection. No secret is stored in the repository.
 
 Validated locally:
 - JavaScript syntax checks passed for functions/api.mjs, functions/healthz.mjs, and lib/api-implementation.mjs.

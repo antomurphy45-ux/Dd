@@ -14,7 +14,7 @@ const lambdaHandler = async function handler(event, context) {
       headers: {
         "content-type": "application/json; charset=utf-8",
         "cache-control": "no-store",
-        "x-construction-control-function": "32.41"
+        "x-construction-control-function": "32.42"
       },
       body: JSON.stringify({
         status: "ok",
