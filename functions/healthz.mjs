@@ -1,4 +1,4 @@
-// Construction Control — Phase 32.46 deployment diagnostic.
+// Construction Control — Phase 32.47 deployment diagnostic.
 // Reports presence/absence only; it never returns secret values.
 
 function presence(name) {
@@ -11,7 +11,7 @@ export default async function handler() {
     platform: "netlify",
     function: "healthz",
     storage: "netlify-blobs",
-    phase: "32.46",
+    phase: "32.47",
     blob_credentials: {
       site_id_present: Boolean(
         process.env.CONSTRUCTION_CONTROL_SITE_ID ||
@@ -32,7 +32,7 @@ export default async function handler() {
     headers: {
       "content-type": "application/json; charset=utf-8",
       "cache-control": "no-store",
-      "x-construction-control-function": "32.46-healthz"
+      "x-construction-control-function": "32.47-healthz"
     }
   });
 }

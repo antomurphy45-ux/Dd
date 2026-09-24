@@ -1,5 +1,5 @@
 // Construction Control API entry point.
-// Phase 32.46: Pyodide virtual filesystem directory fix.
+// Phase 32.47: load the Pyodide sqlite3 package before importing app.py.
 import { withLambda } from "@netlify/aws-lambda-compat";
 
 const lambdaHandler = async function handler(event, context) {
@@ -11,14 +11,14 @@ const lambdaHandler = async function handler(event, context) {
       headers: {
         "content-type": "application/json; charset=utf-8",
         "cache-control": "no-store",
-        "x-construction-control-function": "32.46"
+        "x-construction-control-function": "32.47"
       },
       body: JSON.stringify({
         status: "ok",
         platform: "netlify",
         function: "api",
         storage: "netlify-blobs",
-        phase: "32.46"
+        phase: "32.47"
       })
     };
   }
