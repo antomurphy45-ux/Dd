@@ -1,5 +1,5 @@
 // Construction Control API entry point.
-// Phase 32.54: use Netlify's native context.cookies API for the session cookie.
+// Phase 32.56: robust native cookie handling for Netlify Functions.
 // This removes ambiguity around Set-Cookie forwarding through the Lambda-shaped adapter.
 const implementation = await import("../lib/api-implementation.mjs");
 
@@ -31,11 +31,11 @@ export default async function handler(req, context) {
   const responseHeaders = new Headers(result.headers || {});
   const setCookie = responseHeaders.get("set-cookie");
 
-  // Phase 32.54: Netlify Functions provide a native cookie API.
+  // Phase 32.56: Netlify Functions provide a native cookie API.
   // Use it explicitly for cc_session so the browser receives the session
   // even if an adapter/Headers conversion would otherwise drop Set-Cookie.
   if (setCookie && context?.cookies?.set) {
-    const match = setCookie.match(/(?:^|;\\s*)cc_session=([^;]*)/);
+    const match = setCookie.match(/(?:^|;\s*)cc_session=([^;]*)/);
     if (match) {
       const cookie = {
         name: "cc_session",
@@ -45,10 +45,10 @@ export default async function handler(req, context) {
         path: "/"
       };
 
-      const maxAge = setCookie.match(/(?:^|;\\s*)Max-Age=(\\d+)/i);
+      const maxAge = setCookie.match(/(?:^|;\s*)Max-Age=(\d+)/i);
       if (maxAge) cookie.maxAge = Number(maxAge[1]);
 
-      if (/(?:^|;\\s*)Secure(?:;|$)/i.test(setCookie)) {
+      if (/(?:^|;\s*)Secure(?:;|$)/i.test(setCookie)) {
         cookie.secure = true;
       }
 
