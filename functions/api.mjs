@@ -8,12 +8,20 @@ export default async function handler(req, context) {
   const rawUrl = req.url || `https://${headers.get("host") || "localhost"}/`;
   const bytes = new Uint8Array(await req.arrayBuffer());
 
+  const eventHeaders = Object.fromEntries(headers.entries());
+  // Phase 32.55: Python auth historically reads the canonical "Cookie" key.
+  // Fetch/Netlify may expose the incoming header as lowercase "cookie", so
+  // provide both forms before handing the request to the Python adapter.
+  if (eventHeaders.cookie && !eventHeaders.Cookie) {
+    eventHeaders.Cookie = eventHeaders.cookie;
+  }
+
   const event = {
     path: new URL(rawUrl).pathname,
     rawPath: new URL(rawUrl).pathname,
     rawUrl,
     httpMethod: req.method,
-    headers: Object.fromEntries(headers.entries()),
+    headers: eventHeaders,
     body: Buffer.from(bytes).toString("base64"),
     isBase64Encoded: true
   };
