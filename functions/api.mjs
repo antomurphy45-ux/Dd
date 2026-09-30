@@ -1,70 +1,67 @@
-// Construction Control API entry point.
-// Phase 32.56: robust native cookie handling for Netlify Functions.
-// This removes ambiguity around Set-Cookie forwarding through the Lambda-shaped adapter.
-const implementation = await import("../lib/api-implementation.mjs");
+// Construction Control — native Netlify Function entry point.
+// Phase 33: Request + Context -> Response.
+// No Lambda compatibility layer is used.
 
-export default async function handler(req, context) {
+import { handleRequest } from "../lib/api-implementation.mjs";
+
+function copyIncomingCookie(req, context) {
   const headers = new Headers(req.headers);
-  const rawUrl = req.url || `https://${headers.get("host") || "localhost"}/`;
-  const bytes = new Uint8Array(await req.arrayBuffer());
-
-  const eventHeaders = Object.fromEntries(headers.entries());
-  // Phase 32.55: Python auth historically reads the canonical "Cookie" key.
-  // Fetch/Netlify may expose the incoming header as lowercase "cookie", so
-  // provide both forms before handing the request to the Python adapter.
-  if (eventHeaders.cookie && !eventHeaders.Cookie) {
-    eventHeaders.Cookie = eventHeaders.cookie;
+  // app.py's existing adapter uses the canonical Cookie key in a plain dict.
+  // Netlify's native cookie API is authoritative for incoming cookies.
+  if (!headers.get("cookie") && context?.cookies?.get) {
+    const session = context.cookies.get("cc_session");
+    if (session) headers.set("Cookie", `cc_session=${session}`);
+  } else if (headers.get("cookie")) {
+    headers.set("Cookie", headers.get("cookie"));
   }
+  return headers;
+}
 
-  const event = {
-    path: new URL(rawUrl).pathname,
-    rawPath: new URL(rawUrl).pathname,
-    rawUrl,
-    httpMethod: req.method,
-    headers: eventHeaders,
-    body: Buffer.from(bytes).toString("base64"),
-    isBase64Encoded: true
+function forwardSessionCookie(response, context) {
+  if (!context?.cookies?.set) return;
+  const setCookie = response.headers.get("set-cookie");
+  if (!setCookie) return;
+
+  const match = setCookie.match(/(?:^|;\s*)cc_session=([^;]*)/);
+  if (!match) return;
+
+  const cookie = {
+    name: "cc_session",
+    value: match[1],
+    httpOnly: true,
+    sameSite: "strict",
+    path: "/"
   };
 
-  const result = await implementation.handler(event, context);
+  const maxAge = setCookie.match(/(?:^|;\s*)Max-Age=(\d+)/i);
+  if (maxAge) cookie.maxAge = Number(maxAge[1]);
+  if (/(?:^|;\s*)Secure(?:;|$)/i.test(setCookie)) cookie.secure = true;
 
-  const responseHeaders = new Headers(result.headers || {});
-  const setCookie = responseHeaders.get("set-cookie");
+  context.cookies.set(cookie);
+}
 
-  // Phase 32.56: Netlify Functions provide a native cookie API.
-  // Use it explicitly for cc_session so the browser receives the session
-  // even if an adapter/Headers conversion would otherwise drop Set-Cookie.
-  if (setCookie && context?.cookies?.set) {
-    const match = setCookie.match(/(?:^|;\s*)cc_session=([^;]*)/);
-    if (match) {
-      const cookie = {
-        name: "cc_session",
-        value: match[1],
-        httpOnly: true,
-        sameSite: "strict",
-        path: "/"
-      };
+export default async function handler(req, context) {
+  const headers = copyIncomingCookie(req, context);
+  const nativeRequest = new Request(req.url, {
+    method: req.method,
+    headers,
+    body: ["GET", "HEAD"].includes(req.method) ? undefined : await req.arrayBuffer()
+  });
 
-      const maxAge = setCookie.match(/(?:^|;\s*)Max-Age=(\d+)/i);
-      if (maxAge) cookie.maxAge = Number(maxAge[1]);
+  const response = await handleRequest(nativeRequest);
+  forwardSessionCookie(response, context);
 
-      if (/(?:^|;\s*)Secure(?:;|$)/i.test(setCookie)) {
-        cookie.secure = true;
-      }
-
-      context.cookies.set(cookie);
-      responseHeaders.delete("set-cookie");
-    }
+  // Let Netlify's native cookie API own Set-Cookie delivery. Other response
+  // headers and the body are passed through unchanged.
+  const responseHeaders = new Headers(response.headers);
+  if (responseHeaders.has("set-cookie") && context?.cookies?.set) {
+    responseHeaders.delete("set-cookie");
   }
-
   responseHeaders.delete("content-length");
 
-  const body = result.isBase64Encoded
-    ? Buffer.from(result.body || "", "base64")
-    : result.body || "";
-
-  return new Response(body, {
-    status: Number(result.statusCode || 200),
+  return new Response(response.body, {
+    status: response.status,
+    statusText: response.statusText,
     headers: responseHeaders
   });
 }
