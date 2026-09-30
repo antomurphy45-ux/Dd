@@ -1,9 +1,9 @@
 [build]
   command = "npm run build"
   publish = "public"
-  directory = "functions/"
 
 [functions]
+  directory = "functions/"
   node_bundler = "esbuild"
   external_node_modules = ["pyodide"]
   included_files = [
